@@ -1,10 +1,102 @@
+import os
 import requests
 from bs4 import BeautifulSoup
-import os
-from urllib.parse import urlparse
+from urllib.parse import quote_plus
+import re
 from urllib.parse import urlparse, urljoin
 from typing import List, Optional, Union
 import logging
+
+
+def web_search(query: str, max_results: int = 3) -> str:
+    """
+    Search the internet for information related to the given query and return relevant results.
+
+    This tool performs a web search, fetches the top results, extracts content from those pages,
+    and returns a summary of the most relevant information found.
+
+    Args:
+        query (str): The search query to look up on the internet.
+        max_results (int, optional): Maximum number of web pages to analyze. Defaults to 3.
+
+    Returns:
+        str: A compilation of relevant information found from the search results,
+             including source URLs and snippets of content.
+    """
+    # Encode the query for URL
+    encoded_query = quote_plus(query)
+
+    # Define headers to mimic a browser request
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+
+    # Perform the search using a search engine
+    search_url = f"https://www.google.com/search?q={encoded_query}"
+    try:
+        search_response = requests.get(search_url, headers=headers, timeout=10)
+        search_response.raise_for_status()
+    except Exception as e:
+        return f"Error performing search: {str(e)}"
+
+    # Parse the search results to extract links
+    soup = BeautifulSoup(search_response.text, 'html.parser')
+    result_links = []
+
+    # Extract links from Google search results
+    for link in soup.find_all('a'):
+        href = link.get('href')
+        if href and href.startswith('/url?q='):
+            # Extract actual URL from Google's redirect URL
+            url = href.split('/url?q=')[1].split('&')[0]
+            if not any(domain in url for domain in ['google.', 'youtube.']):
+                result_links.append(url)
+
+    # Limit to the specified number of results
+    result_links = result_links[:max_results]
+
+    if not result_links:
+        return "No relevant results found for the query."
+
+    # Process each link to extract relevant content
+    results = []
+    for i, url in enumerate(result_links):
+        try:
+            # Fetch the webpage
+            page_response = requests.get(url, headers=headers, timeout=10)
+            page_response.raise_for_status()
+
+            # Parse the content
+            page_soup = BeautifulSoup(page_response.text, 'html.parser')
+
+            # Extract the title
+            title = page_soup.title.string if page_soup.title else "No title found"
+
+            # Extract main content (this is a simplified approach)
+            # Remove script and style elements
+            for script in page_soup(["script", "style", "nav", "footer", "header"]):
+                script.decompose()
+
+            # Get text content
+            text = page_soup.get_text(separator=' ', strip=True)
+
+            # Clean up text (remove extra whitespace)
+            text = re.sub(r'\s+', ' ', text).strip()
+
+            # Limit the content length
+            max_content_length = 500
+            content = text[:max_content_length] + "..." if len(text) > max_content_length else text
+
+            # Add to results
+            results.append(f"Source {i + 1}: {url}\nTitle: {title}\nContent snippet: {content}\n")
+
+        except Exception as e:
+            results.append(f"Source {i + 1}: {url}\nError extracting content: {str(e)}\n")
+
+    # Combine all results
+    combined_results = f"Search results for: '{query}'\n\n" + "\n".join(results)
+
+    return combined_results
 
 
 def download_from_index_page(
@@ -132,6 +224,3 @@ def download_from_index_page(
     logging.info(f"Download completed. {len(downloaded_files)}/{len(data_links)} files downloaded to {download_folder}")
     return downloaded_files
 
-
-if __name__ == "__main__":
-    download_from_index_page(url="https://www.mlit.go.jp/kankocho/tokei_hakusyo/shukuhakutokei.html")
