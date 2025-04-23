@@ -1,7 +1,7 @@
 from google import genai
 from mistralai import Mistral
 from pathlib import Path
-from mistralai import DocumentURLChunk, ImageURLChunk, TextChunk
+from mistralai import ImageURLChunk, TextChunk
 import json
 import base64
 
@@ -75,7 +75,7 @@ def test():
     img_path = "/Users/souymodip/Downloads/IMG_2540.jpg"
     querry = "Make a list of names of the book and the authors"
     # analyse_image_gemini(img_path, querry)
-    analyse_image_mistral(img_path, querry, use_pixtral=True)
+    analyse_image_mistral(img_path, querry, use_pixtral=False)
 
 
 if __name__ == "__main__":
